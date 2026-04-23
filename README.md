@@ -1,6 +1,6 @@
-# Pinned Tab Sync
+# Tab Layout Sync
 
-A small Chrome extension that syncs your pinned tabs and tab groups across devices using `chrome.storage.sync`.
+A small Chrome extension that syncs your pinned tabs and named tab groups across devices using `chrome.storage.sync`.
 
 Chrome's built-in sync does not persist pinned tabs, and it does not persist tab-group collapsed state. This extension keeps both in synced storage and reconciles local tabs to match.
 

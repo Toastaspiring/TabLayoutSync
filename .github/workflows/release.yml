@@ -26,7 +26,7 @@ jobs:
 
       - name: Build zip
         run: |
-          NAME="pinned-tab-sync-${GITHUB_REF_NAME}.zip"
+          NAME="tab-layout-sync-${GITHUB_REF_NAME}.zip"
           zip -r "$NAME" \
             manifest.json \
             background.js \

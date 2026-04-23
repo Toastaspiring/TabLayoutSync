@@ -60,7 +60,7 @@ async function saveCurrentPinned() {
 function scheduleSavePins() {
   clearTimeout(pinsSaveTimer);
   pinsSaveTimer = setTimeout(() => {
-    saveCurrentPinned().catch((e) => console.warn('[PinnedTabSync] pins save failed', e));
+    saveCurrentPinned().catch((e) => console.warn('[TabLayoutSync] pins save failed', e));
   }, SAVE_DEBOUNCE_MS);
 }
 
@@ -107,7 +107,7 @@ async function reconcilePinsToRemote() {
         windowId: targetWindowId,
       });
     } catch (e) {
-      console.warn('[PinnedTabSync] could not create pinned tab for', url, e);
+      console.warn('[TabLayoutSync] could not create pinned tab for', url, e);
     }
   }
 }
@@ -173,7 +173,7 @@ async function saveCurrentGroups() {
 function scheduleSaveGroups() {
   clearTimeout(groupsSaveTimer);
   groupsSaveTimer = setTimeout(() => {
-    saveCurrentGroups().catch((e) => console.warn('[PinnedTabSync] groups save failed', e));
+    saveCurrentGroups().catch((e) => console.warn('[TabLayoutSync] groups save failed', e));
   }, SAVE_DEBOUNCE_MS);
 }
 
@@ -210,7 +210,7 @@ async function reconcileGroupsToRemote() {
           });
           await chrome.tabs.group({ tabIds: [newTab.id], groupId: existing.id });
         } catch (e) {
-          console.warn('[PinnedTabSync] add to group failed', e);
+          console.warn('[TabLayoutSync] add to group failed', e);
         }
       }
       continue;
@@ -243,7 +243,7 @@ async function reconcileGroupsToRemote() {
         collapsed: !!rg.collapsed,
       });
     } catch (e) {
-      console.warn('[PinnedTabSync] create group failed', e);
+      console.warn('[TabLayoutSync] create group failed', e);
     }
   }
 }
@@ -298,7 +298,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'sync') return;
   if (isReconciling) return;
   if (changes[PINS_KEY] || changes[GROUPS_KEY]) {
-    reconcileAll().catch((e) => console.warn('[PinnedTabSync] reconcile failed', e));
+    reconcileAll().catch((e) => console.warn('[TabLayoutSync] reconcile failed', e));
   }
 });
 
@@ -313,7 +313,7 @@ chrome.runtime.onStartup.addListener(() => {
       await saveCurrentPinned();
       await saveCurrentGroups();
     } catch (e) {
-      console.warn('[PinnedTabSync] startup failed', e);
+      console.warn('[TabLayoutSync] startup failed', e);
     }
   }, STARTUP_DELAY_MS);
 });
@@ -346,7 +346,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 
     await reconcileAll();
   } catch (e) {
-    console.warn('[PinnedTabSync] install init failed', e);
+    console.warn('[TabLayoutSync] install init failed', e);
   }
 });
 
