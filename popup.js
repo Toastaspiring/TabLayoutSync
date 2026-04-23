@@ -1,5 +1,18 @@
-const listEl = document.getElementById('list');
+const pinsEl = document.getElementById('pins');
+const groupsEl = document.getElementById('groups');
 const statusEl = document.getElementById('status');
+
+const GROUP_COLOR_HEX = {
+  grey: '#9e9e9e',
+  blue: '#1a73e8',
+  red: '#d93025',
+  yellow: '#fbbc04',
+  green: '#1e8e3e',
+  pink: '#e8457c',
+  purple: '#9334e6',
+  cyan: '#00bcd4',
+  orange: '#f57c00',
+};
 
 function send(msg) {
   return new Promise((resolve) => {
@@ -32,7 +45,7 @@ function hostOf(url) {
   try { return new URL(url).hostname; } catch { return url; }
 }
 
-function createRow(url) {
+function createPinRow(url) {
   const li = document.createElement('li');
 
   const icon = document.createElement('img');
@@ -59,11 +72,11 @@ function createRow(url) {
   const btn = document.createElement('button');
   btn.className = 'remove';
   btn.type = 'button';
-  btn.title = 'Remove from sync (also unpins on other devices)';
+  btn.title = 'Remove from sync';
   btn.textContent = '\u00D7';
   btn.addEventListener('click', async () => {
     btn.disabled = true;
-    await send({ type: 'remove', url });
+    await send({ type: 'removePin', url });
     await render();
   });
 
@@ -73,64 +86,108 @@ function createRow(url) {
   return li;
 }
 
+function createGroupRow(group) {
+  const li = document.createElement('li');
+
+  const dot = document.createElement('span');
+  dot.className = 'dot';
+  dot.style.background = GROUP_COLOR_HEX[group.color] || '#9e9e9e';
+
+  const text = document.createElement('div');
+  text.className = 'text';
+
+  const title = document.createElement('div');
+  title.className = 'title';
+  title.textContent = group.title;
+  const badge = document.createElement('span');
+  badge.className = 'badge';
+  badge.textContent = group.collapsed ? 'collapsed' : 'expanded';
+  title.appendChild(badge);
+
+  const sub = document.createElement('div');
+  sub.className = 'subtitle';
+  const n = group.urls.length;
+  sub.textContent = `${n} ${n === 1 ? 'tab' : 'tabs'}`;
+
+  text.appendChild(title);
+  text.appendChild(sub);
+
+  const btn = document.createElement('button');
+  btn.className = 'remove';
+  btn.type = 'button';
+  btn.title = 'Remove group from sync';
+  btn.textContent = '\u00D7';
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    await send({ type: 'removeGroup', title: group.title });
+    await render();
+  });
+
+  li.appendChild(dot);
+  li.appendChild(text);
+  li.appendChild(btn);
+  return li;
+}
+
+function renderEmpty(listEl, text) {
+  const li = document.createElement('li');
+  li.className = 'empty';
+  li.textContent = text;
+  listEl.appendChild(li);
+}
+
 async function render() {
   const state = await send({ type: 'getState' });
   if (!state || !state.ok) {
     statusEl.textContent = 'Could not load state.';
     return;
   }
-  const synced = state.synced || [];
+  const pins = state.pins || [];
+  const groups = state.groups || [];
   const localPinnedCount = state.localPinnedCount || 0;
+  const localGroupCount = state.localGroupCount || 0;
+
   statusEl.textContent =
-    `${synced.length} synced across devices \u00B7 ${localPinnedCount} pinned here`;
+    `${pins.length} pins / ${groups.length} groups synced \u00B7 ` +
+    `${localPinnedCount} pins / ${localGroupCount} groups here`;
 
-  listEl.innerHTML = '';
+  pinsEl.innerHTML = '';
+  groupsEl.innerHTML = '';
 
-  if (!synced.length) {
-    const li = document.createElement('li');
-    li.className = 'empty';
-    li.textContent = 'Pin a tab to start syncing.';
-    listEl.appendChild(li);
-    return;
+  if (!pins.length) {
+    renderEmpty(pinsEl, 'Pin a tab to start syncing.');
+  } else {
+    for (const url of pins) pinsEl.appendChild(createPinRow(url));
   }
 
-  for (const url of synced) {
-    listEl.appendChild(createRow(url));
+  if (!groups.length) {
+    renderEmpty(groupsEl, 'Name a tab group to sync it.');
+  } else {
+    for (const g of groups) groupsEl.appendChild(createGroupRow(g));
   }
 }
 
-document.getElementById('sync').addEventListener('click', async (ev) => {
-  const btn = ev.currentTarget;
+async function runButton(btn, msg) {
   btn.disabled = true;
   try {
-    await send({ type: 'syncNow' });
+    await send(msg);
     await render();
   } finally {
     btn.disabled = false;
   }
+}
+
+document.getElementById('sync').addEventListener('click', (ev) => {
+  runButton(ev.currentTarget, { type: 'syncNow' });
 });
 
-document.getElementById('restore').addEventListener('click', async (ev) => {
-  const btn = ev.currentTarget;
-  btn.disabled = true;
-  try {
-    await send({ type: 'restoreNow' });
-    await render();
-  } finally {
-    btn.disabled = false;
-  }
+document.getElementById('restore').addEventListener('click', (ev) => {
+  runButton(ev.currentTarget, { type: 'restoreNow' });
 });
 
-document.getElementById('clear').addEventListener('click', async (ev) => {
-  if (!confirm('Remove every synced pinned tab? This will unpin them on all devices that sync.')) return;
-  const btn = ev.currentTarget;
-  btn.disabled = true;
-  try {
-    await send({ type: 'clearAll' });
-    await render();
-  } finally {
-    btn.disabled = false;
-  }
+document.getElementById('clear').addEventListener('click', (ev) => {
+  if (!confirm('Remove every synced pin and group? They will be unpinned and ungrouped on every device that syncs.')) return;
+  runButton(ev.currentTarget, { type: 'clearAll' });
 });
 
 render();

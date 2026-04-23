@@ -8,15 +8,23 @@
 <body>
   <header>
     <h1>Pinned Tab Sync</h1>
-    <p class="status" id="status">Loading…</p>
+    <p class="status" id="status">Loading...</p>
   </header>
 
-  <ul id="list" class="list" aria-live="polite"></ul>
+  <section class="panel">
+    <h2>Pinned tabs</h2>
+    <ul id="pins" class="list" aria-live="polite"></ul>
+  </section>
+
+  <section class="panel">
+    <h2>Tab groups</h2>
+    <ul id="groups" class="list" aria-live="polite"></ul>
+  </section>
 
   <footer>
-    <button id="sync" type="button" title="Save currently pinned tabs to sync">Sync now</button>
-    <button id="restore" type="button" title="Open and pin any synced tabs missing on this device">Restore missing</button>
-    <button id="clear" type="button" class="danger" title="Remove every synced pinned tab">Clear all</button>
+    <button id="sync" type="button" title="Save currently pinned tabs and groups to sync">Sync now</button>
+    <button id="restore" type="button" title="Open and restore anything missing on this device">Restore missing</button>
+    <button id="clear" type="button" class="danger" title="Remove everything from sync">Clear all</button>
   </footer>
 
   <script src="popup.js"></script>

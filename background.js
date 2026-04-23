@@ -1,9 +1,11 @@
-const STORAGE_KEY = 'pinnedTabs';
+const PINS_KEY = 'pinnedTabs';
+const GROUPS_KEY = 'tabGroups';
 const SAVE_DEBOUNCE_MS = 800;
 const STARTUP_DELAY_MS = 1500;
 
 let isReconciling = false;
-let saveTimer = null;
+let pinsSaveTimer = null;
+let groupsSaveTimer = null;
 
 function isSyncableUrl(url) {
   if (!url) return false;
@@ -16,14 +18,22 @@ function isSyncableUrl(url) {
   return true;
 }
 
-async function getRemote() {
-  const r = await chrome.storage.sync.get(STORAGE_KEY);
-  const v = r[STORAGE_KEY];
+function arraysEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+// ---------- Pinned tabs ----------
+
+async function getRemotePins() {
+  const r = await chrome.storage.sync.get(PINS_KEY);
+  const v = r[PINS_KEY];
   return Array.isArray(v) ? v : [];
 }
 
-async function setRemote(list) {
-  await chrome.storage.sync.set({ [STORAGE_KEY]: list });
+async function setRemotePins(list) {
+  await chrome.storage.sync.set({ [PINS_KEY]: list });
 }
 
 async function getCurrentPinnedUrls() {
@@ -39,24 +49,18 @@ async function getCurrentPinnedUrls() {
   return urls;
 }
 
-function arraysEqual(a, b) {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
-}
-
 async function saveCurrentPinned() {
   if (isReconciling) return;
   const local = await getCurrentPinnedUrls();
-  const remote = await getRemote();
+  const remote = await getRemotePins();
   if (arraysEqual(local, remote)) return;
-  await setRemote(local);
+  await setRemotePins(local);
 }
 
-function scheduleSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    saveCurrentPinned().catch((e) => console.warn('[PinnedTabSync] save failed', e));
+function scheduleSavePins() {
+  clearTimeout(pinsSaveTimer);
+  pinsSaveTimer = setTimeout(() => {
+    saveCurrentPinned().catch((e) => console.warn('[PinnedTabSync] pins save failed', e));
   }, SAVE_DEBOUNCE_MS);
 }
 
@@ -67,87 +71,247 @@ async function pickTargetWindowId() {
   return (focused || wins[0]).id;
 }
 
-async function reconcileToRemote() {
+async function reconcilePinsToRemote() {
+  const remote = await getRemotePins();
+  const remoteSet = new Set(remote);
+  const allTabs = await chrome.tabs.query({});
+
+  for (const t of allTabs) {
+    if (t.pinned && isSyncableUrl(t.url) && !remoteSet.has(t.url)) {
+      try { await chrome.tabs.update(t.id, { pinned: false }); } catch (_) {}
+    }
+  }
+
+  const openByUrl = new Map();
+  for (const t of allTabs) {
+    if (!openByUrl.has(t.url)) openByUrl.set(t.url, t);
+  }
+
+  let targetWindowId = null;
+
+  for (const url of remote) {
+    const existing = openByUrl.get(url);
+    if (existing) {
+      if (!existing.pinned) {
+        try { await chrome.tabs.update(existing.id, { pinned: true }); } catch (_) {}
+      }
+      continue;
+    }
+    if (targetWindowId == null) targetWindowId = await pickTargetWindowId();
+    if (targetWindowId == null) continue;
+    try {
+      await chrome.tabs.create({
+        url,
+        pinned: true,
+        active: false,
+        windowId: targetWindowId,
+      });
+    } catch (e) {
+      console.warn('[PinnedTabSync] could not create pinned tab for', url, e);
+    }
+  }
+}
+
+// ---------- Tab groups ----------
+
+async function getRemoteGroups() {
+  const r = await chrome.storage.sync.get(GROUPS_KEY);
+  const v = r[GROUPS_KEY];
+  return Array.isArray(v) ? v : [];
+}
+
+async function setRemoteGroups(list) {
+  await chrome.storage.sync.set({ [GROUPS_KEY]: list });
+}
+
+async function getCurrentGroups() {
+  const groups = await chrome.tabGroups.query({});
+  const result = [];
+  for (const g of groups) {
+    if (!g.title) continue;
+    const tabs = await chrome.tabs.query({ groupId: g.id });
+    tabs.sort((a, b) => a.index - b.index);
+    const urls = [];
+    const seen = new Set();
+    for (const t of tabs) {
+      if (!isSyncableUrl(t.url)) continue;
+      if (seen.has(t.url)) continue;
+      seen.add(t.url);
+      urls.push(t.url);
+    }
+    if (!urls.length) continue;
+    result.push({
+      title: g.title,
+      color: g.color,
+      collapsed: !!g.collapsed,
+      urls,
+    });
+  }
+  return result;
+}
+
+function groupsEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i], y = b[i];
+    if (x.title !== y.title) return false;
+    if (x.color !== y.color) return false;
+    if (!!x.collapsed !== !!y.collapsed) return false;
+    if (!arraysEqual(x.urls, y.urls)) return false;
+  }
+  return true;
+}
+
+async function saveCurrentGroups() {
   if (isReconciling) return;
-  isReconciling = true;
-  try {
-    const remote = await getRemote();
-    const remoteSet = new Set(remote);
-    const allTabs = await chrome.tabs.query({});
+  const local = await getCurrentGroups();
+  const remote = await getRemoteGroups();
+  if (groupsEqual(local, remote)) return;
+  await setRemoteGroups(local);
+}
 
-    for (const t of allTabs) {
-      if (t.pinned && isSyncableUrl(t.url) && !remoteSet.has(t.url)) {
-        try { await chrome.tabs.update(t.id, { pinned: false }); } catch (_) {}
+function scheduleSaveGroups() {
+  clearTimeout(groupsSaveTimer);
+  groupsSaveTimer = setTimeout(() => {
+    saveCurrentGroups().catch((e) => console.warn('[PinnedTabSync] groups save failed', e));
+  }, SAVE_DEBOUNCE_MS);
+}
+
+async function reconcileGroupsToRemote() {
+  const remoteGroups = await getRemoteGroups();
+  if (!remoteGroups.length) return;
+
+  const localGroups = await chrome.tabGroups.query({});
+  const byTitle = new Map();
+  for (const g of localGroups) {
+    if (g.title && !byTitle.has(g.title)) byTitle.set(g.title, g);
+  }
+
+  for (const rg of remoteGroups) {
+    const existing = byTitle.get(rg.title);
+
+    if (existing) {
+      const updates = {};
+      if (existing.color !== rg.color) updates.color = rg.color;
+      if (!!existing.collapsed !== !!rg.collapsed) updates.collapsed = rg.collapsed;
+      if (Object.keys(updates).length) {
+        try { await chrome.tabGroups.update(existing.id, updates); } catch (_) {}
       }
-    }
 
-    const openByUrl = new Map();
-    for (const t of allTabs) {
-      if (!openByUrl.has(t.url)) openByUrl.set(t.url, t);
-    }
-
-    let targetWindowId = null;
-
-    for (const url of remote) {
-      const existing = openByUrl.get(url);
-      if (existing) {
-        if (!existing.pinned) {
-          try { await chrome.tabs.update(existing.id, { pinned: true }); } catch (_) {}
+      const currentTabs = await chrome.tabs.query({ groupId: existing.id });
+      const currentUrls = new Set(currentTabs.map((t) => t.url));
+      for (const url of rg.urls) {
+        if (currentUrls.has(url)) continue;
+        try {
+          const newTab = await chrome.tabs.create({
+            url,
+            active: false,
+            windowId: existing.windowId,
+          });
+          await chrome.tabs.group({ tabIds: [newTab.id], groupId: existing.id });
+        } catch (e) {
+          console.warn('[PinnedTabSync] add to group failed', e);
         }
-        continue;
       }
-      if (targetWindowId == null) {
-        targetWindowId = await pickTargetWindowId();
-      }
-      if (targetWindowId == null) continue;
+      continue;
+    }
+
+    const targetWindowId = await pickTargetWindowId();
+    if (targetWindowId == null) continue;
+
+    const tabIds = [];
+    for (const url of rg.urls) {
       try {
-        await chrome.tabs.create({
+        const t = await chrome.tabs.create({
           url,
-          pinned: true,
           active: false,
           windowId: targetWindowId,
         });
-      } catch (e) {
-        console.warn('[PinnedTabSync] could not create tab for', url, e);
-      }
+        tabIds.push(t.id);
+      } catch (_) {}
     }
+    if (!tabIds.length) continue;
+
+    try {
+      const newGroupId = await chrome.tabs.group({
+        tabIds,
+        createProperties: { windowId: targetWindowId },
+      });
+      await chrome.tabGroups.update(newGroupId, {
+        title: rg.title,
+        color: rg.color,
+        collapsed: !!rg.collapsed,
+      });
+    } catch (e) {
+      console.warn('[PinnedTabSync] create group failed', e);
+    }
+  }
+}
+
+// ---------- Combined reconcile ----------
+
+async function reconcileAll() {
+  if (isReconciling) return;
+  isReconciling = true;
+  try {
+    await reconcilePinsToRemote();
+    await reconcileGroupsToRemote();
   } finally {
     isReconciling = false;
   }
 }
 
+// ---------- Tab + group events ----------
+
 chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
   if ('pinned' in changeInfo) {
-    scheduleSave();
-    return;
+    scheduleSavePins();
+  } else if ('url' in changeInfo && tab.pinned) {
+    scheduleSavePins();
   }
-  if ('url' in changeInfo && tab.pinned) {
-    scheduleSave();
+  if ('groupId' in changeInfo) {
+    scheduleSaveGroups();
+  } else if ('url' in changeInfo && tab.groupId !== undefined && tab.groupId !== -1) {
+    scheduleSaveGroups();
   }
 });
 
 chrome.tabs.onCreated.addListener((tab) => {
-  if (tab.pinned) scheduleSave();
+  if (tab.pinned) scheduleSavePins();
+  if (tab.groupId !== undefined && tab.groupId !== -1) scheduleSaveGroups();
 });
 
 chrome.tabs.onRemoved.addListener(() => {
-  scheduleSave();
+  scheduleSavePins();
+  scheduleSaveGroups();
 });
+
+if (chrome.tabGroups) {
+  chrome.tabGroups.onCreated.addListener(() => scheduleSaveGroups());
+  chrome.tabGroups.onUpdated.addListener(() => scheduleSaveGroups());
+  chrome.tabGroups.onRemoved.addListener(() => scheduleSaveGroups());
+}
+
+// ---------- Remote changes ----------
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'sync') return;
-  if (!changes[STORAGE_KEY]) return;
   if (isReconciling) return;
-  reconcileToRemote().catch((e) => console.warn('[PinnedTabSync] reconcile failed', e));
+  if (changes[PINS_KEY] || changes[GROUPS_KEY]) {
+    reconcileAll().catch((e) => console.warn('[PinnedTabSync] reconcile failed', e));
+  }
 });
+
+// ---------- Startup / install ----------
 
 chrome.runtime.onStartup.addListener(() => {
   // Delay so Chrome's session restore finishes before we read the tab set,
   // otherwise a partial snapshot can overwrite the synced list.
   setTimeout(async () => {
     try {
-      await reconcileToRemote();
+      await reconcileAll();
       await saveCurrentPinned();
+      await saveCurrentGroups();
     } catch (e) {
       console.warn('[PinnedTabSync] startup failed', e);
     }
@@ -156,57 +320,86 @@ chrome.runtime.onStartup.addListener(() => {
 
 chrome.runtime.onInstalled.addListener(async () => {
   try {
-    const local = await getCurrentPinnedUrls();
-    const remote = await getRemote();
-    const merged = [];
-    const seen = new Set();
-    for (const u of [...remote, ...local]) {
-      if (seen.has(u)) continue;
-      seen.add(u);
-      merged.push(u);
+    const [localPins, remotePins] = [await getCurrentPinnedUrls(), await getRemotePins()];
+    const mergedPins = [];
+    const seenPin = new Set();
+    for (const u of [...remotePins, ...localPins]) {
+      if (seenPin.has(u)) continue;
+      seenPin.add(u);
+      mergedPins.push(u);
     }
-    if (!arraysEqual(merged, remote)) {
-      await setRemote(merged);
+    if (!arraysEqual(mergedPins, remotePins)) {
+      await setRemotePins(mergedPins);
     }
-    await reconcileToRemote();
+
+    const [localGroups, remoteGroups] = [await getCurrentGroups(), await getRemoteGroups()];
+    const mergedGroups = [];
+    const seenGroup = new Set();
+    for (const g of [...remoteGroups, ...localGroups]) {
+      if (seenGroup.has(g.title)) continue;
+      seenGroup.add(g.title);
+      mergedGroups.push(g);
+    }
+    if (!groupsEqual(mergedGroups, remoteGroups)) {
+      await setRemoteGroups(mergedGroups);
+    }
+
+    await reconcileAll();
   } catch (e) {
     console.warn('[PinnedTabSync] install init failed', e);
   }
 });
+
+// ---------- Popup messaging ----------
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
     try {
       switch (msg && msg.type) {
         case 'getState': {
-          const synced = await getRemote();
+          const pins = await getRemotePins();
+          const groups = await getRemoteGroups();
           const localPinned = await chrome.tabs.query({ pinned: true });
+          const localGroupCount = chrome.tabGroups
+            ? (await chrome.tabGroups.query({})).length
+            : 0;
           sendResponse({
             ok: true,
-            synced,
+            pins,
+            groups,
             localPinnedCount: localPinned.length,
+            localGroupCount,
           });
           return;
         }
-        case 'remove': {
-          const remote = await getRemote();
-          const updated = remote.filter((u) => u !== msg.url);
-          if (!arraysEqual(updated, remote)) await setRemote(updated);
+        case 'removePin': {
+          const pins = await getRemotePins();
+          const updated = pins.filter((u) => u !== msg.url);
+          if (!arraysEqual(updated, pins)) await setRemotePins(updated);
+          sendResponse({ ok: true });
+          return;
+        }
+        case 'removeGroup': {
+          const groups = await getRemoteGroups();
+          const updated = groups.filter((g) => g.title !== msg.title);
+          if (!groupsEqual(updated, groups)) await setRemoteGroups(updated);
           sendResponse({ ok: true });
           return;
         }
         case 'syncNow': {
           await saveCurrentPinned();
+          await saveCurrentGroups();
           sendResponse({ ok: true });
           return;
         }
         case 'restoreNow': {
-          await reconcileToRemote();
+          await reconcileAll();
           sendResponse({ ok: true });
           return;
         }
         case 'clearAll': {
-          await setRemote([]);
+          await setRemotePins([]);
+          await setRemoteGroups([]);
           sendResponse({ ok: true });
           return;
         }

@@ -23,9 +23,7 @@
   }
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 html, body {
   margin: 0;
@@ -37,8 +35,8 @@ html, body {
 }
 
 body {
-  width: 360px;
-  max-height: 520px;
+  width: 380px;
+  max-height: 600px;
   display: flex;
   flex-direction: column;
 }
@@ -61,14 +59,26 @@ header h1 {
   color: var(--muted);
 }
 
+.panel {
+  border-bottom: 1px solid var(--border);
+}
+
+.panel h2 {
+  margin: 0;
+  padding: 8px 14px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .list {
   list-style: none;
   margin: 0;
-  padding: 4px 0;
+  padding: 2px 0 6px;
   overflow-y: auto;
-  flex: 1;
-  min-height: 60px;
-  max-height: 360px;
+  max-height: 220px;
 }
 
 .list li {
@@ -76,23 +86,15 @@ header h1 {
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  border-bottom: 1px solid var(--border);
 }
 
-.list li:last-child {
-  border-bottom: none;
-}
-
-.list li:hover {
-  background: var(--hover);
-}
+.list li:hover { background: var(--hover); }
 
 .list li.empty {
   justify-content: center;
   color: var(--muted);
   font-style: italic;
-  padding: 18px 12px;
-  border-bottom: none;
+  padding: 10px 12px;
 }
 
 .favicon {
@@ -102,12 +104,21 @@ header h1 {
   border-radius: 2px;
 }
 
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-left: 3px;
+  margin-right: 3px;
+}
+
 .text {
   flex: 1;
   min-width: 0;
 }
 
-.host {
+.host, .title {
   font-weight: 500;
   font-size: 12px;
   overflow: hidden;
@@ -115,12 +126,22 @@ header h1 {
   white-space: nowrap;
 }
 
-.url {
+.url, .subtitle {
   color: var(--muted);
   font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--border);
+  color: var(--muted);
+  margin-left: 4px;
 }
 
 button.remove {
@@ -146,7 +167,6 @@ footer {
   display: flex;
   gap: 6px;
   padding: 10px 12px;
-  border-top: 1px solid var(--border);
 }
 
 footer button {
@@ -161,9 +181,7 @@ footer button {
   transition: background-color 0.1s;
 }
 
-footer button:hover {
-  background: var(--hover);
-}
+footer button:hover { background: var(--hover); }
 
 footer button.danger {
   color: var(--danger);

@@ -1,16 +1,26 @@
 # Pinned Tab Sync
 
-A small Chrome extension that syncs your pinned tabs across devices using `chrome.storage.sync`.
+A small Chrome extension that syncs your pinned tabs and tab groups across devices using `chrome.storage.sync`.
 
-Chrome's built-in sync does not persist pinned tabs. This extension keeps a list of pinned URLs in synced storage, and reconciles local tabs to match.
+Chrome's built-in sync does not persist pinned tabs, and it does not persist tab-group collapsed state. This extension keeps both in synced storage and reconciles local tabs to match.
 
 ## Features
 
+### Pinned tabs
 - Pinning a tab adds it to the synced list.
 - Unpinning removes it.
-- On startup (and when the synced list changes on another device), any missing URL is opened and pinned; any locally pinned tab not in the synced list is unpinned.
-- Popup UI lists every synced URL with favicon, host, and a remove button.
-- `Sync now`, `Restore missing`, and `Clear all` buttons for manual control.
+- On startup or when another device changes the list, missing URLs are opened and pinned; locally pinned tabs not in the list are unpinned.
+
+### Tab groups
+- Only groups with a name are synced (title is the identity key, so keep names unique).
+- Syncs title, color, collapsed/expanded state, and member URLs in order.
+- On another device, missing groups are recreated in the focused window; existing same-titled groups have their color, collapsed state, and missing member URLs reconciled.
+- Add-only for member tabs: removing a tab from a local group will not delete it from other devices (use the popup `x` button to delete a group everywhere).
+
+### UI
+- Popup has two sections: pinned tabs and tab groups.
+- Each row has a remove button.
+- `Sync now`, `Restore missing`, and `Clear all` at the bottom.
 
 ## Install (unpacked)
 
@@ -33,22 +43,34 @@ Unpacked extensions are not auto-installed across devices. To get that, publish 
 
 ## Storage format
 
-One key under `chrome.storage.sync`:
+Two keys under `chrome.storage.sync`:
 
 ```json
-{ "pinnedTabs": ["https://example.com/", "https://other.site/page"] }
+{
+  "pinnedTabs": ["https://example.com/", "https://other.site/page"],
+  "tabGroups": [
+    {
+      "title": "Work",
+      "color": "blue",
+      "collapsed": false,
+      "urls": ["https://docs.example.com/", "https://mail.example.com/"]
+    }
+  ]
+}
 ```
 
 ## Limits
 
-- `chrome.storage.sync` caps a single value at 8 KB. Roughly 40 to 80 URLs depending on length. Plenty for normal use.
+- `chrome.storage.sync` caps a single value at 8 KB. Fine for a normal pin set and a handful of named groups.
 - Schemes other than `http(s)` are skipped (`chrome://`, `file://`, `about:`, extension URLs).
-- Restored tabs open in the currently focused normal window.
+- Restored tabs and groups are created in the currently focused normal window.
 - If a URL already exists as an unpinned tab, it is pinned in place instead of opening a duplicate.
+- Group identity is the title: renaming a group on one device looks like "old group removed, new group added" to the others.
 
 ## Permissions
 
 - `tabs`: read tab URLs and update pin state.
+- `tabGroups`: read and write tab group title, color, and collapsed state.
 - `storage`: read and write `chrome.storage.sync`.
 - `favicon`: show favicons in the popup list.
 
