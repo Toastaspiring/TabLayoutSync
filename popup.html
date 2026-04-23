@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pinned Tab Sync</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <h1>Pinned Tab Sync</h1>
+    <p class="status" id="status">Loading…</p>
+  </header>
+
+  <ul id="list" class="list" aria-live="polite"></ul>
+
+  <footer>
+    <button id="sync" type="button" title="Save currently pinned tabs to sync">Sync now</button>
+    <button id="restore" type="button" title="Open and pin any synced tabs missing on this device">Restore missing</button>
+    <button id="clear" type="button" class="danger" title="Remove every synced pinned tab">Clear all</button>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

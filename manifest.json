@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Pinned Tab Sync",
+  "version": "1.0.0",
+  "description": "Syncs your pinned tabs across devices using chrome.storage.sync. Auto-pins missing tabs on startup and when changes arrive from other devices.",
+  "permissions": ["tabs", "storage", "favicon"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Pinned Tab Sync"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["/_favicon/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
