@@ -100,25 +100,37 @@ async function render() {
 }
 
 document.getElementById('sync').addEventListener('click', async (ev) => {
-  ev.currentTarget.disabled = true;
-  await send({ type: 'syncNow' });
-  ev.currentTarget.disabled = false;
-  await render();
+  const btn = ev.currentTarget;
+  btn.disabled = true;
+  try {
+    await send({ type: 'syncNow' });
+    await render();
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 document.getElementById('restore').addEventListener('click', async (ev) => {
-  ev.currentTarget.disabled = true;
-  await send({ type: 'restoreNow' });
-  ev.currentTarget.disabled = false;
-  await render();
+  const btn = ev.currentTarget;
+  btn.disabled = true;
+  try {
+    await send({ type: 'restoreNow' });
+    await render();
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 document.getElementById('clear').addEventListener('click', async (ev) => {
   if (!confirm('Remove every synced pinned tab? This will unpin them on all devices that sync.')) return;
-  ev.currentTarget.disabled = true;
-  await send({ type: 'clearAll' });
-  ev.currentTarget.disabled = false;
-  await render();
+  const btn = ev.currentTarget;
+  btn.disabled = true;
+  try {
+    await send({ type: 'clearAll' });
+    await render();
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 render();
