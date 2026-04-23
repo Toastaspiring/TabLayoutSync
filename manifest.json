@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tab Layout Sync",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Syncs pinned tabs and named tab groups (with collapsed state) across devices via chrome.storage.sync.",
   "permissions": ["tabs", "tabGroups", "storage", "favicon"],
   "background": {

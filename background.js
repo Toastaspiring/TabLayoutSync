@@ -292,6 +292,36 @@ if (chrome.tabGroups) {
   chrome.tabGroups.onRemoved.addListener(() => scheduleSaveGroups());
 }
 
+// Catch the case where Chrome/Brave kept running in the background, the
+// user closed the last window, and then opened a new one. onStartup
+// does not fire in that path, so reconcile if the new window looks empty.
+const NEW_TAB_URLS = new Set([
+  '',
+  'about:blank',
+  'chrome://newtab/',
+  'chrome://new-tab-page/',
+  'brave://newtab/',
+  'edge://newtab/',
+]);
+
+chrome.windows.onCreated.addListener((win) => {
+  if (win.type !== 'normal') return;
+  setTimeout(async () => {
+    try {
+      const allWindows = await chrome.windows.getAll({ windowTypes: ['normal'] });
+      if (allWindows.length !== 1) return;
+      const tabs = await chrome.tabs.query({ windowId: win.id });
+      if (tabs.length !== 1) return;
+      const only = tabs[0];
+      if (only.pinned) return;
+      if (only.url && !NEW_TAB_URLS.has(only.url)) return;
+      await reconcileAll();
+    } catch (e) {
+      console.warn('[TabLayoutSync] window-created reconcile failed', e);
+    }
+  }, 1500);
+});
+
 // ---------- Remote changes ----------
 
 chrome.storage.onChanged.addListener((changes, area) => {
